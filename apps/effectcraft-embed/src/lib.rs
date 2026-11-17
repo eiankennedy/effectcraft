@@ -42,6 +42,9 @@ impl EmbedApp for Effect {
         if method == "ui.screenshot" {
             return json!({"ok": false, "error": "Workbench takes the screenshot of the panel itself"}).to_string();
         }
+        if hands_off(method, &params) {
+            return json!({"ok": true, "result": {"on": false}}).to_string();
+        }
         let (method, params) = translate(method, params);
         let (req, rx) = ControlRequest::new(method, params);
         if self.requests.send(req).is_err() {
@@ -123,6 +126,13 @@ fn make(ctx: &egui::Context) -> Box<dyn EmbedApp> {
     // Workbench's look from the first frame; Workbench sets the mode's accent right after
     let _ = effectcraft_ui_egui::menus::invoke(&mut app, ctx, "view.workbench", json!({"on": true}));
     Box::new(Effect { app, frame: eframe::Frame::_new_kittest(), requests, pending: None })
+}
+
+/// Whether a request is `view.handsOff`: a video editor has no Hands off (E's rule), so the panel takes the call
+/// and nothing changes.
+fn hands_off(method: &str, params: &Value) -> bool {
+    let command = params.get("command").or_else(|| params.get("id")).and_then(Value::as_str);
+    method == "view.handsOff" || (matches!(method, "engine.execute" | "command" | "ui.command") && command == Some("view.handsOff"))
 }
 
 craft_embed::export_embed!(make);
