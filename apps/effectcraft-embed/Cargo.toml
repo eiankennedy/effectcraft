@@ -1,0 +1,22 @@
+[package]
+name = "effectcraft-embed"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "EffectCraft as a library Workbench hosts natively in its side panel (craft-embed)"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+effectcraft-host = { workspace = true }
+effectcraft-ui-egui = { workspace = true }
+egui = { workspace = true }
+# The app's `eframe::App` impl is what this drives; `wgpu` for `Frame::wgpu_render_state`.
+eframe = { workspace = true, features = ["wgpu"] }
+serde_json = { workspace = true }
+craft-embed = { path = "../../../../crates/craft-embed" }

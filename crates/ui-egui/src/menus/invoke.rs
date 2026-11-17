@@ -491,6 +491,17 @@ pub fn invoke(app: &mut EffectcraftApp, ctx: &egui::Context, id: &str, params: V
         return Ok(json!({"dialog": id}));
     }
 
+    if id == "view.workbench" {
+        // Workbench's look (its palette, square corners, its mode's accent) while EffectCraft runs in
+        // Workbench's panel: `{on?, accent?: "#rrggbb"}`. Without `on` it toggles, unless an accent is given.
+        let toggled = crate::theme::workbench_accent().is_none() || params.get("accent").is_some();
+        let on = params.get("on").and_then(Value::as_bool).unwrap_or(toggled);
+        let accent = params.get("accent").and_then(Value::as_str).and_then(parse_hex).or_else(crate::theme::workbench_accent);
+        crate::theme::set_workbench(on.then(|| accent.unwrap_or(egui::Color32::from_rgb(0xff, 0x60, 0x00))));
+        app.applied_prefs = None;
+        app.apply_prefs(ctx);
+        return Ok(json!({"on": on}));
+    }
     if id == "view.theme.toggle" {
         app.cycle_appearance(ctx);
         return Ok(json!({"appearanceMode": app.session.prefs.appearance.appearance_mode}));
@@ -744,4 +755,15 @@ pub fn invoke(app: &mut EffectcraftApp, ctx: &egui::Context, id: &str, params: V
         }
     }
     Ok(Value::Null)
+}
+
+/// `#rrggbb` to a colour.
+fn parse_hex(s: &str) -> Option<egui::Color32> {
+    let h = s.strip_prefix('#')?;
+    if h.len() != 6 || !h.is_ascii() {
+        return None;
+    }
+    let n = u32::from_str_radix(h, 16).ok()?;
+    let [_, r, g, b] = n.to_be_bytes();
+    Some(egui::Color32::from_rgb(r, g, b))
 }

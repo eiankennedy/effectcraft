@@ -12,6 +12,24 @@ use egui::FontTweak;
 use egui::emath::GuiRounding as _;
 use egui::{Color32, FontData, FontDefinitions, FontFamily, FontId, Stroke, TextStyle, Visuals};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicU32, Ordering};
+
+/// Workbench's look (dark, flat, its mode's accent) when EffectCraft runs inside Workbench's panel:
+/// 0 = off, else `0x01RRGGBB`. Set by the `view.workbench` command.
+static WORKBENCH: AtomicU32 = AtomicU32::new(0);
+
+/// Turn Workbench's look on with an accent colour, or off with `None`.
+pub fn set_workbench(accent: Option<Color32>) {
+    let v = accent.map_or(0, |c| 0x0100_0000 | (u32::from(c.r()) << 16) | (u32::from(c.g()) << 8) | u32::from(c.b()));
+    WORKBENCH.store(v, Ordering::Relaxed);
+}
+
+/// The accent Workbench set, when its look is on.
+pub fn workbench_accent() -> Option<Color32> {
+    let v = WORKBENCH.load(Ordering::Relaxed);
+    let [_, r, g, b] = v.to_be_bytes();
+    (v != 0).then(|| Color32::from_rgb(r, g, b))
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ThemeKind {
@@ -289,14 +307,77 @@ impl Tokens {
     /// Theme tokens for the current settings: theme, UI brightness and label colours.
     /// The tokens for theme `kind` (resolved from the appearance mode) with the rest of the
     /// Appearance settings: brightness, label colours, gradients.
+    /// Inside Workbench ([`workbench_accent`]) its palette replaces the theme and brightness.
     pub fn from_prefs(p: &effectcraft_engine::prefs::Prefs, kind: ThemeKind) -> Tokens {
-        let mut t = Tokens::for_kind(kind).with_brightness(p.appearance.brightness as f32);
+        let mut t = match workbench_accent() {
+            Some(a) => Tokens::workbench(a),
+            None => Tokens::for_kind(kind).with_brightness(p.appearance.brightness as f32),
+        };
         for (i, l) in effectcraft_color::Label::ALL.iter().enumerate() {
             let [r, g, b] = p.label_rgb(*l);
             t.labels[i] = Color32::from_rgb(r, g, b);
         }
-        t.gradients = p.appearance.use_gradients;
+        t.gradients = p.appearance.use_gradients && workbench_accent().is_none();
         t
+    }
+
+    /// Workbench's palette: near-black surfaces, hairline borders, warm white text, its mode's
+    /// accent, square corners and flat fills.
+    pub fn workbench(accent: Color32) -> Tokens {
+        let surface = Color32::from_rgb(0x12, 0x13, 0x16);
+        let raised = Color32::from_rgb(0x18, 0x19, 0x1c);
+        let sunk = Color32::from_rgb(0x06, 0x06, 0x07);
+        let hairline = Color32::from_rgb(0x33, 0x34, 0x36);
+        let text = Color32::from_rgb(0xf2, 0xf1, 0xee);
+        let dim = Color32::from_rgb(0x98, 0x99, 0x98);
+        let faint = Color32::from_rgb(0x83, 0x84, 0x85);
+        let hover = Color32::from_rgb(0x1c, 0x1d, 0x20);
+        let pressed = Color32::from_rgb(0x26, 0x27, 0x2a);
+        Tokens {
+            app_bg: sunk,
+            header_bg: surface,
+            panel_bg: surface,
+            tab_text: dim,
+            tab_text_active: text,
+            focus: accent,
+            accent,
+            accent_hover: accent.lerp_to_gamma(Color32::WHITE, 0.2),
+            text,
+            text_dim: dim,
+            text_faint: faint,
+            icon: dim,
+            icon_active: text,
+            hover,
+            pressed,
+            field_bg: sunk,
+            field_border: hairline,
+            separator: hairline,
+            row: surface,
+            row_alt: raised,
+            row_selected: pressed,
+            hot_text: accent,
+            tl_bg: sunk,
+            tl_ruler_bg: surface,
+            tl_ruler_tick: faint,
+            tl_ruler_text: dim,
+            cti: accent,
+            work_area: hairline,
+            keyframe: dim,
+            keyframe_selected: accent,
+            pasteboard: sunk,
+            timecode: accent,
+            fx_header: raised,
+            fx_header_active: pressed,
+            tl_graph_selected: raised,
+            switch_well: sunk,
+            tl_nav_bar: hairline,
+            tl_work_area_bar: hairline,
+            expr_bg: sunk,
+            radius: 0.0,
+            radius_sm: 0.0,
+            gradients: false,
+            ..Tokens::for_kind(ThemeKind::Dark)
+        }
     }
 
     /// Lighten (b > 0) or darken (b < 0) the interface greys, like After Effects' brightness
@@ -620,8 +701,9 @@ pub fn apply_visuals(ctx: &egui::Context, t: &Tokens) {
     v.selection.stroke = Stroke::new(1.0, Color32::WHITE);
     v.hyperlink_color = t.accent;
     v.window_stroke = Stroke::new(1.0, t.field_border);
-    v.window_corner_radius = egui::CornerRadius::same(8);
-    v.menu_corner_radius = egui::CornerRadius::same(6);
+    let flat = workbench_accent().is_some(); // Workbench is square-cornered
+    v.window_corner_radius = egui::CornerRadius::same(if flat { 0 } else { 8 });
+    v.menu_corner_radius = egui::CornerRadius::same(if flat { 0 } else { 6 });
     v.popup_shadow = egui::epaint::Shadow { offset: [0, 6], blur: 20, spread: 0, color: Color32::from_black_alpha(150) };
     v.window_shadow = egui::epaint::Shadow { offset: [0, 10], blur: 36, spread: 0, color: Color32::from_black_alpha(170) };
     for w in [&mut v.widgets.noninteractive, &mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {

@@ -34,6 +34,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     uic!("view.theme.dark", "Theme: Dark", [], None),
     uic!("view.theme.darker", "Theme: Darker", [], None),
     uic!("view.theme.light", "Theme: Light", [], None),
+    uic!("view.workbench", "Workbench Look", [], None),
     uic!("timeline.zoomIn", "Zoom In Time", [], Some("=")),
     uic!("timeline.zoomOut", "Zoom Out Time", [], Some("-")),
     uic!("timeline.zoomFit", "Zoom to Fit Comp", [], Some("Shift+;")),
